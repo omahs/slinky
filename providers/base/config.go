@@ -70,7 +70,7 @@ func (p *Provider[K, V]) SetAPIHandler(apiHandler apihandler.APIQueryHandler[K, 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.Type() != providertypes.API {
+	if p.Type() != providertypes.API && p.Type() != providertypes.EVMAPI {
 		panic("cannot set api handler for non-api provider")
 	}
 
@@ -82,7 +82,7 @@ func (p *Provider[K, V]) GetAPIHandler() apihandler.APIQueryHandler[K, V] {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.Type() != providertypes.API {
+	if p.Type() != providertypes.API && p.Type() != providertypes.EVMAPI {
 		panic("cannot get api handler for non-api provider")
 	}
 

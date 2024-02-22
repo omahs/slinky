@@ -31,6 +31,8 @@ type APIConfig struct {
 
 	// Name is the name of the provider that corresponds to this config.
 	Name string `mapstructure:"name" toml:"name"`
+
+	EVM EVMAPIConfig `mapstructure:"evm" toml:"evm"`
 }
 
 // ValidateBasic performs basic validation of the API config.

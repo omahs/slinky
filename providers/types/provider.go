@@ -9,6 +9,7 @@ type ProviderType string
 const (
 	WebSockets ProviderType = "websockets"
 	API        ProviderType = "api"
+	EVMAPI     ProviderType = "evm_api"
 )
 
 // Provider defines an interface a data provider must implement.

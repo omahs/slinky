@@ -25,6 +25,8 @@ type DefaultOracleProviderFactory struct {
 	apiFactory factory.APIQueryHandlerFactory[slinkytypes.CurrencyPair, *big.Int]
 	// wsFactory is the factory function that creates websocket query handlers.
 	wsFactory factory.WebSocketQueryHandlerFactory[slinkytypes.CurrencyPair, *big.Int]
+	// evmAPIFactory is the factory function that creates API based EVM query handlers.
+	evmAPIFactory factory.APIQueryHandlerFactory[slinkytypes.CurrencyPair, *big.Int]
 }
 
 // NewDefaultProviderFactory returns a new instance of the default provider factory.
@@ -32,6 +34,7 @@ func NewDefaultProviderFactory(
 	logger *zap.Logger,
 	apiFactory factory.APIQueryHandlerFactory[slinkytypes.CurrencyPair, *big.Int],
 	wsFactory factory.WebSocketQueryHandlerFactory[slinkytypes.CurrencyPair, *big.Int],
+	evmAPIFactory factory.APIQueryHandlerFactory[slinkytypes.CurrencyPair, *big.Int],
 ) (*DefaultOracleProviderFactory, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
@@ -46,9 +49,10 @@ func NewDefaultProviderFactory(
 	}
 
 	return &DefaultOracleProviderFactory{
-		logger:     logger,
-		apiFactory: apiFactory,
-		wsFactory:  wsFactory,
+		logger:        logger,
+		apiFactory:    apiFactory,
+		wsFactory:     wsFactory,
+		evmAPIFactory: evmAPIFactory,
 	}, nil
 }
 
@@ -68,6 +72,26 @@ func (f *DefaultOracleProviderFactory) Factory() factory.ProviderFactory[slinkyt
 		providers := make([]providertypes.Provider[slinkytypes.CurrencyPair, *big.Int], len(cfg.Providers))
 		for i, p := range cfg.Providers {
 			switch {
+			case p.API.Enabled && p.API.EVM.Enabled:
+				queryHandler, err := f.evmAPIFactory(f.logger, p, apiMetrics)
+				if err != nil {
+					return nil, err
+				}
+
+				// Create the provider.
+				provider, err := base.NewProvider[slinkytypes.CurrencyPair, *big.Int](
+					base.WithName[slinkytypes.CurrencyPair, *big.Int](p.Name),
+					base.WithLogger[slinkytypes.CurrencyPair, *big.Int](f.logger),
+					base.WithAPIQueryHandler(queryHandler),
+					base.WithAPIConfig[slinkytypes.CurrencyPair, *big.Int](p.API),
+					base.WithIDs[slinkytypes.CurrencyPair, *big.Int](cfg.Market.GetCurrencyPairs()),
+					base.WithMetrics[slinkytypes.CurrencyPair, *big.Int](providerMetrics),
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				providers[i] = provider
 			case p.API.Enabled:
 				queryHandler, err := f.apiFactory(f.logger, p, apiMetrics)
 				if err != nil {

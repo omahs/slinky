@@ -17,6 +17,31 @@ func TestProviderConfig(t *testing.T) {
 		expectedErr bool
 	}{
 		{
+			name: "good EVM API config",
+			config: config.ProviderConfig{
+				EVMAPI: config.EVMAPIConfig{
+					Enabled:    true,
+					Timeout:    time.Second,
+					Interval:   time.Second,
+					MaxQueries: 1,
+					Name:       "test",
+					Atomic:     true,
+					URL:        "http://test.com",
+				},
+				Name: "test",
+				Market: config.MarketConfig{
+					Name: "test",
+					CurrencyPairToMarketConfigs: map[string]config.CurrencyPairMarketConfig{
+						"BITCOIN/USD": {
+							Ticker:       "BTC/USD",
+							CurrencyPair: slinkytypes.NewCurrencyPair("BITCOIN", "USD"),
+						},
+					},
+				},
+			},
+			expectedErr: false,
+		},
+		{
 			name: "good API config",
 			config: config.ProviderConfig{
 				API: config.APIConfig{

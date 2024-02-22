@@ -34,6 +34,9 @@ type Provider[K providertypes.ResponseKey, V providertypes.ResponseValue] struct
 	// apiCfg is the API configuration for the provider.
 	apiCfg config.APIConfig
 
+	// evmAPICfg is the API configuration for an evm API provider
+	evmAPICfg config.EVMAPIConfig
+
 	// ws is the handler for the websocket data. Developers implement this interface to extend
 	// the provider's functionality. For example, this could be used to fetch prices from a
 	// websocket, where K is the currency pair and V is the price. For more information on how
@@ -202,6 +205,8 @@ func (p *Provider[K, V]) Type() providertypes.ProviderType {
 		return providertypes.API
 	case p.wsCfg.Enabled && p.ws != nil:
 		return providertypes.WebSockets
+	case p.evmAPICfg.Enabled && p.api != nil:
+		return providertypes.EVMAPI
 	default:
 		return "unknown"
 	}

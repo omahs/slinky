@@ -65,12 +65,14 @@ func main() {
 	// do, see the documentation for the `providers/base` package.
 	apiFactory := oraclefactory.APIQueryHandlerFactory()      // Replace with custom API factory.
 	wsFactory := oraclefactory.WebSocketQueryHandlerFactory() // Replace with custom websocket factory.
+	evmFactory := oraclefactory.EVMAPIQueryHandlerFactory()
 
 	// Create the providers using the default provider factory.
 	generator, err := oraclefactory.NewDefaultProviderFactory(
 		logger,
 		apiFactory,
 		wsFactory,
+		evmFactory,
 	)
 	if err != nil {
 		logger.Error("failed to create provider factory", zap.Error(err))
