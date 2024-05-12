@@ -15,6 +15,8 @@ const (
 	// Name is the name of the Raydium API.
 	Name = "raydium_api"
 
+	Type = types.ConfigType
+
 	// NormalizedTokenAmountExponent.
 	NormalizedTokenAmountExponent = 18
 )
@@ -96,13 +98,21 @@ func SolanaJSONRPCError(err error) error {
 	return fmt.Errorf("solana json-rpc error: %s", err.Error())
 }
 
-var DefaultAPIConfig = config.APIConfig{
-	Enabled:          true,
-	Name:             Name,
-	Timeout:          500 * time.Millisecond,
-	Interval:         500 * time.Millisecond,
-	ReconnectTimeout: 2000 * time.Millisecond,
-	MaxQueries:       10,
-	Atomic:           false,
-	BatchSize:        50, // maximal # of accounts in getMultipleAccounts query is 100
-}
+var (
+	DefaultAPIConfig = config.APIConfig{
+		Enabled:          true,
+		Name:             Name,
+		Timeout:          500 * time.Millisecond,
+		Interval:         500 * time.Millisecond,
+		ReconnectTimeout: 2000 * time.Millisecond,
+		MaxQueries:       10,
+		Atomic:           false,
+		BatchSize:        50, // maximal # of accounts in getMultipleAccounts query is 100
+	}
+
+	DefaultProviderConfig = config.ProviderConfig{
+		Name: Name,
+		API:  DefaultAPIConfig,
+		Type: Type,
+	}
+)
