@@ -108,6 +108,9 @@ var (
 		MaxQueries:       10,
 		Atomic:           false,
 		BatchSize:        50, // maximal # of accounts in getMultipleAccounts query is 100
+		Endpoints: []config.Endpoint{
+			{URL: "https://api.mainnet-beta.solana.com"},
+		},
 	}
 
 	DefaultProviderConfig = config.ProviderConfig{
