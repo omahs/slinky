@@ -14,7 +14,6 @@ import (
 
 	"github.com/skip-mev/slinky/providers/static"
 
-	"cosmossdk.io/math"
 	abcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtabci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/libs/rand"
@@ -38,6 +37,7 @@ import (
 	slinkytypes "github.com/skip-mev/slinky/pkg/types"
 	mmtypes "github.com/skip-mev/slinky/x/marketmap/types"
 	oracletypes "github.com/skip-mev/slinky/x/oracle/types"
+	"github.com/strangelove-ventures/interchaintest/v8/testreporter"
 )
 
 const (
@@ -58,26 +58,67 @@ var (
 	)
 )
 
-// construct the network from a spec
+// ChainConstructor returns the chain that will be using slinky, as well as any additional chains
+// that are needed for the test. The first chain returned will be the chain that is used in the
+// slinky integration tests.
+type ChainConstructor func(t *testing.T, spec *interchaintest.ChainSpec) ([]*cosmos.CosmosChain)
 
-// ChainBuilderFromChainSpec creates an interchaintest chain builder factory given a ChainSpec
-// and returns the associated chain
-func ChainBuilderFromChainSpec(t *testing.T, spec *interchaintest.ChainSpec) *cosmos.CosmosChain {
+// Interchain is an interface representing the set of chains that are used in the slinky e2e tests, as well
+// as any additional relayer / ibc-path information
+type Interchain interface {
+	Relayer() ibc.Relayer
+	Reporter() *testreporter.RelayerExecReporter
+	IBCPath() string
+}
+
+// InterchainConstructor returns an interchain that will be used in the slinky integration tests. 
+// The chains used in the interchain constructor should be the chains constructed via the ChainConstructor
+type InterchainConstructor func(ctx context.Context, t *testing.T, chains []*cosmos.CosmosChain) Interchain
+
+// DefaultChainConstructor is the default construct of a chan that will be used in the slinky 
+// integration tests. There is only a single chain that is created.
+func DefaultChainConstructor(t *testing.T, spec *interchaintest.ChainSpec) []*cosmos.CosmosChain {
 	// require that NumFullNodes == NumValidators == 4
-	require.Equal(t, *spec.NumValidators, 4)
+	require.Equal(t, 4, *spec.NumValidators)
 
 	cf := interchaintest.NewBuiltinChainFactory(zaptest.NewLogger(t), []*interchaintest.ChainSpec{spec})
 
 	chains, err := cf.Chains(t.Name())
 	require.NoError(t, err)
 
+	// require that the chain is a cosmos chain
 	require.Len(t, chains, 1)
 	chain := chains[0]
 
 	cosmosChain, ok := chain.(*cosmos.CosmosChain)
 	require.True(t, ok)
 
-	return cosmosChain
+	return []*cosmos.CosmosChain{cosmosChain}
+}
+
+// DefaultInterchainConstructor is the default constructor of an interchain that will be used in the slinky.
+func DefaultInterchainConstructor(ctx context.Context, t *testing.T, chains []*cosmos.CosmosChain) Interchain {
+	require.Len(t, chains, 1)
+
+	ic := interchaintest.NewInterchain()
+	ic.AddChain(chains[0])
+
+	// create docker network
+	client, networkID := interchaintest.DockerSetup(t)
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	// build the interchain
+	err := ic.Build(ctx, nil, interchaintest.InterchainBuildOptions{
+		SkipPathCreation: true,
+		Client:           client,
+		NetworkID:        networkID,
+		TestName:         t.Name(),
+	})
+	require.NoError(t, err)
+
+	return nil
 }
 
 // SetOracleConfigsOnApp writes the oracle configuration to the given node's application config.
@@ -136,32 +177,8 @@ func AddSidecarToNode(node *cosmos.ChainNode, conf ibc.SidecarConfig) {
 		conf.HomeDir,
 		conf.Ports,
 		conf.StartCmd,
+		conf.Env,
 	)
-}
-
-// spin up the network (with side-cars enabled)
-
-// BuildPOBInterchain creates a new Interchain testing env with the configured POB CosmosChain
-func BuildPOBInterchain(t *testing.T, ctx context.Context, chain ibc.Chain) *interchaintest.Interchain {
-	ic := interchaintest.NewInterchain()
-	ic.AddChain(chain)
-
-	// create docker network
-	client, networkID := interchaintest.DockerSetup(t)
-
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	// build the interchain
-	err := ic.Build(ctx, nil, interchaintest.InterchainBuildOptions{
-		SkipPathCreation: true,
-		Client:           client,
-		NetworkID:        networkID,
-		TestName:         t.Name(),
-	})
-	require.NoError(t, err)
-
-	return ic
 }
 
 // SetOracleConfigsOnOracle writes the oracle and metrics configs to the given node's
@@ -291,8 +308,13 @@ func QueryCurrencyPair(chain *cosmos.CosmosChain, cp slinkytypes.CurrencyPair, h
 // SubmitProposal creates and submits a proposal to the chain
 func SubmitProposal(chain *cosmos.CosmosChain, deposit sdk.Coin, submitter string, msgs ...sdk.Msg) (string, error) {
 	// build the proposal
-	randStr := rand.Str(10)
-	prop, err := chain.BuildProposal(msgs, randStr, randStr, randStr, deposit.String(), submitter, false)
+	rand := rand.Str(10)
+	protoMsgs := make([]cosmos.ProtoMessage, len(msgs))
+	for i, msg := range msgs {
+		protoMsgs[i] = msg
+	}
+
+	prop, err := chain.BuildProposal(protoMsgs, rand, rand, rand, deposit.String(), submitter, false)
 	if err != nil {
 		return "", err
 	}
@@ -308,13 +330,17 @@ func PassProposal(chain *cosmos.CosmosChain, propId string, timeout time.Duratio
 		return fmt.Errorf("proposal did not enter voting period: %v", err)
 	}
 
+	propIdUint, err := strconv.ParseUint(propId, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to convert proposal id to uint: %v", err)
+	}
 	// have all nodes vote on the proposal
 	wg := sync.WaitGroup{}
 	for _, node := range chain.Nodes() {
 		wg.Add(1)
 		go func(node *cosmos.ChainNode) {
 			defer wg.Done()
-			node.VoteOnProposal(context.Background(), validatorKey, propId, yes)
+			node.VoteOnProposal(context.Background(), validatorKey, propIdUint, yes)
 		}(node)
 	}
 	wg.Wait()
@@ -377,6 +403,29 @@ func (s *SlinkyIntegrationSuite) AddCurrencyPairs(chain *cosmos.CosmosChain, use
 	return nil
 }
 
+func (s *SlinkyIntegrationSuite) UpdateCurrencyPair(chain *cosmos.CosmosChain, markets []mmtypes.Market) error {
+	msg := &mmtypes.MsgUpdateMarkets{
+		Authority: s.user.FormattedAddress(),
+		UpdateMarkets: markets,
+	}
+
+	tx := CreateTx(s.T(), s.chain, s.user, gasPrice, msg)
+
+	// get an rpc endpoint for the chain
+	client := chain.Nodes()[0].Client
+	// broadcast the tx
+	resp, err := client.BroadcastTxCommit(context.Background(), tx)
+	if err != nil {
+		return err
+	}
+
+	if resp.TxResult.Code != abcitypes.CodeTypeOK {
+		return fmt.Errorf(resp.TxResult.Log)
+	}
+
+	return nil
+}
+
 // QueryProposal queries the chain for a given proposal
 func QueryProposal(chain *cosmos.CosmosChain, propID string) (*govtypesv1.QueryProposalResponse, error) {
 	// get grpc address
@@ -422,7 +471,7 @@ func WaitForHeight(chain *cosmos.CosmosChain, height uint64, timeout time.Durati
 			return false, err
 		}
 
-		return h >= height, nil
+		return uint64(h) >= height, nil
 	})
 }
 
@@ -433,7 +482,7 @@ func WaitForHeight(chain *cosmos.CosmosChain, height uint64, timeout time.Durati
 func ExpectVoteExtensions(chain *cosmos.CosmosChain, timeout time.Duration, ves []slinkyabci.OracleVoteExtension) (uint64, error) {
 	client := chain.Nodes()[0].Client
 
-	var blockHeight uint64
+	var blockHeight int64
 	if err := testutil.WaitForCondition(timeout, 100*time.Millisecond, func() (bool, error) {
 		var err error
 
@@ -488,7 +537,7 @@ func ExpectVoteExtensions(chain *cosmos.CosmosChain, timeout time.Duration, ves 
 	}
 
 	// we want to wait for the application state to reflect the proposed state from blockHeight
-	return blockHeight, WaitForHeight(chain, blockHeight+1, timeout)
+	return uint64(blockHeight), WaitForHeight(chain, uint64(blockHeight+1), timeout)
 }
 
 // wrapper around extendedVoteInfo for use in sorting (to make ordering deterministic in tests)
@@ -540,18 +589,4 @@ func (vv validatorVotes) Less(i, j int) bool {
 
 	// break ties by the sum of the prices for each validator
 	return iTotalPrice < jTotalPrice
-}
-
-// UpdateMarketMapParams creates + submits the proposal to update the marketmap params, votes for the prop w/ all nodes,
-// and waits for the proposal to pass.
-func UpdateMarketMapParams(chain *cosmos.CosmosChain, authority, denom string, deposit int64, timeout time.Duration, user cosmos.User, params mmtypes.Params) (string, error) {
-	propId, err := SubmitProposal(chain, sdk.NewCoin(denom, math.NewInt(deposit)), user.KeyName(), []sdk.Msg{&mmtypes.MsgParams{
-		Authority: authority,
-		Params:    params,
-	}}...)
-	if err != nil {
-		return "", err
-	}
-
-	return propId, PassProposal(chain, propId, timeout)
 }
