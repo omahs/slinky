@@ -164,8 +164,15 @@ var (
 					Enabled:          true,
 				},
 				ProviderConfigs: []mmtypes.ProviderConfig{
-					coinbase.DefaultMarketConfig.MustGetProviderConfig(coinbase.Name, constants.BITCOIN_USD),
-					okx.DefaultMarketConfig.MustGetProviderConfig(okx.Name, constants.BITCOIN_USD),
+					// coinbase.DefaultMarketConfig.MustGetProviderConfig(coinbase.Name, constants.BITCOIN_USD),
+					mmtypes.ProviderConfig{
+						Name: coinbase.Name,
+						OffChainTicker: "BTCUSD", 
+					},
+					mmtypes.ProviderConfig{
+						Name: okx.Name,
+						OffChainTicker: "BTC-USD",
+					},
 				},
 			},
 			constants.ETHEREUM_USD.String(): {
@@ -176,8 +183,15 @@ var (
 					Enabled:          true,
 				},
 				ProviderConfigs: []mmtypes.ProviderConfig{
-					coinbase.DefaultMarketConfig.MustGetProviderConfig(coinbase.Name, constants.ETHEREUM_USD),
-					okx.DefaultMarketConfig.MustGetProviderConfig(okx.Name, constants.ETHEREUM_USD),
+					// coinbase.DefaultMarketConfig.MustGetProviderConfig(coinbase.Name, constants.ETHEREUM_USD),
+					mmtypes.ProviderConfig{
+						Name: coinbase.Name,
+						OffChainTicker: "ETHUSD",
+					},
+					mmtypes.ProviderConfig{
+						Name: okx.Name,
+						OffChainTicker: "ETH-USD",
+					},
 				},
 			},
 		},

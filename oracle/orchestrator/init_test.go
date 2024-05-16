@@ -68,8 +68,12 @@ func TestInit(t *testing.T) {
 		checkProviderState(
 			t,
 			[]oracletypes.ProviderTicker{
-				coinbase.DefaultMarketConfig.MustGetProviderTicker(constants.BITCOIN_USD),
-				coinbase.DefaultMarketConfig.MustGetProviderTicker(constants.ETHEREUM_USD),
+				oracletypes.DefaultProviderTicker{
+					OffChainTicker: "BTCUSD",
+				},
+				oracletypes.DefaultProviderTicker{
+					OffChainTicker: "ETHUSD",
+				},
 			},
 			coinbase.Name,
 			providertypes.API,

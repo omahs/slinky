@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/skip-mev/slinky/oracle/config"
-	"github.com/skip-mev/slinky/oracle/constants"
 	"github.com/skip-mev/slinky/oracle/types"
 )
 
@@ -46,17 +45,6 @@ var (
 		Name: Name,
 		API:  DefaultETHAPIConfig,
 		Type: Type,
-	}
-
-	// DefaultETHMarketConfig is the default market configuration for tokens on
-	// Ethereum mainnet.
-	DefaultETHMarketConfig = types.CurrencyPairsToProviderTickers{
-		constants.MOG_USD: {
-			OffChainTicker: "0xaaee1a9723aadb7afa2810263653a34ba2c21c7a",
-		},
-		constants.PEPE_USD: {
-			OffChainTicker: "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
-		},
 	}
 )
 
